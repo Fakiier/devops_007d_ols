@@ -135,7 +135,7 @@ public class ProductoController {
             @ApiResponse(responseCode = "200", description = "Verificación exitosa")
     })
     @GetMapping("/exist/{id}")
-    public ResponseEntity<?> productExists(@PathVariable Long id) {
+    public ResponseEntity<?> productExist(@PathVariable Long id) {
         log.debug("Verificando existencia de producto - ID: {}", id);
         boolean exists = productoService.productExists(id);
         return ResponseEntity.ok(Map.of("exists", exists));
