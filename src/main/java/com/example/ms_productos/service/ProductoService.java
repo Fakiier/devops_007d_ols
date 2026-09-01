@@ -148,7 +148,7 @@ public class ProductoService {
         log.info("Stock actualizado - Producto: {}, Nuevo stock: {}", producto.getNombre(), producto.getStock());
     }
 
-    public boolean productExists(Long id) {
+    public boolean productExist(Long id) {
         log.debug("Verificando existencia de producto - ID: {}", id);
         boolean exists = productoRepository.existsById(id);
         log.debug("Producto ID: {} - Existe: {}", id, exists);
