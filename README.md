@@ -4,7 +4,7 @@
 
 Este repositorio contiene la base del microservicio `ms-productos` (catálogo de 
 productos), desarrollado previamente en Spring Boot, utilizado como base para 
-implementar el primer pipeline DevOps del curso Ingeniería DevOps (DOY0101). 
+implementar el primer pipeline DevOps del curso Ingeniería DevOps. 
 El objetivo de este encargo es demostrar el uso de control de versiones colaborativo 
 mediante Git y GitHub, y la automatización básica de integración continua con 
 GitHub Actions.
@@ -20,10 +20,10 @@ Se implementó **GitFlow** como modelo de ramificación. Se eligió este modelo 
 
 - El encargo requería explícitamente ramas diferenciadas para desarrollo (`develop`), 
   producción (`main`), nuevas funcionalidades (`feature/*`) y arreglos urgentes (`hotfix/*`).
-- Al trabajar en pareja sobre el mismo microservicio, GitFlow permite que cada integrante 
-  desarrolle su propia funcionalidad en una rama independiente sin afectar el trabajo 
-  del otro, integrando los cambios de forma controlada mediante Pull Requests.
-- Separar `main` de `develop` permite mantener siempre una versión estable del 
+- Al trabajar en pareja sobre el mismo microservicio, GitFlow nos permitió que cada uno
+  desarrolle su propia trabajo en una rama independiente sin afectar el trabajo 
+  del otro, integrando los cambios de forma controlada mediante pull Requests.
+- Separar `main` de `develop` permitió mantener siempre una versión estable del 
   microservicio, mientras el trabajo en curso se valida en `develop` antes de integrarse.
 
 Ramas utilizadas en este repositorio:
@@ -36,14 +36,10 @@ Ramas utilizadas en este repositorio:
 ## 3. Convenciones de Commits y Naming de Ramas
 
 **Formato de mensajes de commit:**
-- `feat:` nueva funcionalidad (ej. `feat: agregamos nuevo endpoint para verificar existencia`)
-- `fix:` corrección de errores (ej. `fix: corregir validacion si existe el producto`)
-- `ci:` cambios de automatización (ej. `ci: agregar workflow de GitHub Actions`)
+- `feat:` nueva funcionalidad
+- `fix:` corrección de errores
+- `ci:` cambios de automatización
 - `docs:` cambios de documentación
-
-**Naming de ramas:**
-- `feature/<nombre-descriptivo-en-minusculas>`
-- `hotfix/<nombre-descriptivo-en-minusculas>`
 
 ## 4. Estrategia de Revisión de Pull Requests
 
@@ -65,7 +61,7 @@ El repositorio cuenta con un workflow en `.github/workflows/ci.yml` que:
 
 - Se ejecuta automáticamente con cada `push` a `develop` y `pull request` hacia `main`.
 - Descarga el código con `actions/checkout@v7`.
-- Configura Java 21 (distribución Temurin) con `actions/setup-java@v4`.
+- Configura Java 21 (distribución Temurin) con `actions/setup-java@v7`.
 - Compila el proyecto y ejecuta las pruebas unitarias y de integración con Maven 
   (`mvn clean install`).
 
@@ -87,7 +83,9 @@ y las justificaciones técnicas fueron hechas por nosotros, los integrantes del 
 ## 7. Reflexiones Individuales
 
 **Javier Romero:**  
-
+Como reflexión yo diría que los contenidos vistos en esta unidad son de vital importancia en nuestros futuros trabajos, aunque sean un tanto simples, a fin de cuentas son cosas básicas que se ocuparán día a día, por lo que aprenderlas sin dudas ayuda a que nuestra formación como futuros profesionales sea aún más completa.
+Esta herramienta GitFlow nos ayuda a poder ser más organizados a la hora de realizar proyectos que suelen ser más importantes, sobre todo si es en grupos ya que cada uno puede interactuar en su linea y posteriormente acceder a versiones más nuevas o antiguas del código.
+Sobre el tema IA, está claro que hoy en día tenemos que aprender a convivir con ella ya que es una nueva tecnología que llegó para quedarse, pero no por eso nos tenemos que dejar llevar por ella y dejar que haga todo por nosotros, es por ello que en nuestro trabajo se utilizó principalmente como una guía y consultor de errores dejando las decisiones más importantes para el factor humano, o sea, nosotros.
 **Catalina Campos:**  
 Personalmente, creo que uno de los mayores aprendizajes de esta evaluación y el proceso que conlleva es que al tener un orden en los trabajos, se puede ser mucho mas eficiente. Cada uno por su lado y cuando ya tenemos casi todo hecho, juntarlo no es tan difícil y tampoco vamos sobre escribiendo lo que nuestro compañero hace. Además que tener todo detallado ayuda mucho a la hora de poder comprender de mejor manera el trabajo hecho.
 Tambien en el pull request hace que tengamos al otro para apoyarnos y que tambien vea y revise lo que estamos haciendo, y pueda quiza ver errores o detalles donde yo no los vi. 
