@@ -40,7 +40,7 @@ Ramas utilizadas en este repositorio:
 - `fix:` corrección de errores
 - `ci:` cambios de automatización
 - `docs:` cambios de documentación
-
+- `chore:` configuración del entorno
 ## 4. Estrategia de Revisión de Pull Requests
 
 Cada Pull Request fue revisado por el otro integrante del equipo antes de aprobar 
