@@ -4,112 +4,12 @@ services:
     container_name: eureka-server
     ports:
       - "8761:8761"
-
-  ms-carrito:
-    build: ./ms-carrito
-    container_name: ms-carrito
-    ports:
-      - "9092:9092"
-    environment:
-      SPRING_PROFILES_ACTIVE: docker
-    depends_on:
-      - eureka-server
-
+      
   ms-productos:
     build: ./ms-productos
     container_name: ms-productos
     ports:
       - "9095:9095"
-    environment:
-      SPRING_PROFILES_ACTIVE: docker
-    depends_on:
-      - eureka-server
-
-  ms-descuentos:
-    build: ./ms-descuentos
-    container_name: ms-descuentos
-    ports:
-      - "9098:9098"
-    environment:
-      SPRING_PROFILES_ACTIVE: docker
-    depends_on:
-      - eureka-server
-
-  ms-pagos:
-    build: ./ms-pagos
-    container_name: ms-pagos
-    ports:
-      - "9094:9094"
-    environment:
-      SPRING_PROFILES_ACTIVE: docker
-    depends_on:
-      - eureka-server
-
-  ms-envios:
-    build: ./ms-envios
-    container_name: ms-envios
-    ports:
-      - "9099:9099" 
-    environment:
-      SPRING_PROFILES_ACTIVE: docker
-    depends_on:
-      - eureka-server
-
-  ms-order:
-    build: ./ms-order
-    container_name: ms-order
-    ports:
-      - "9097:9097"
-    environment:
-      SPRING_PROFILES_ACTIVE: docker
-    depends_on:
-      - eureka-server
-
-  ms-reviews:
-    build: ./ms-reviews
-    container_name: ms-reviews
-    ports:
-      - "9091:9091"
-    environment:
-      SPRING_PROFILES_ACTIVE: docker
-    depends_on:
-      - eureka-server
-
-  ms-subscriptions:
-    build: ./ms-subscriptions
-    container_name: ms-subscriptions
-    ports:
-      - "9089:9089"
-    environment:
-      SPRING_PROFILES_ACTIVE: docker
-    depends_on:
-      - eureka-server
-
-  ms-tickets:
-    build: ./ms-tickets
-    container_name: ms-tickets
-    ports:
-      - "9096:9096"
-    environment:
-      SPRING_PROFILES_ACTIVE: docker
-    depends_on:
-      - eureka-server
-
-  ms-users:
-    build: ./ms-users
-    container_name: ms-users
-    ports:
-      - "9090:9090"
-    environment:
-      SPRING_PROFILES_ACTIVE: docker
-    depends_on:
-      - eureka-server
-
-  ms-wishlist:
-    build: ./ms-wishlist
-    container_name: ms-wishlist
-    ports:
-      - "9093:9093"
     environment:
       SPRING_PROFILES_ACTIVE: docker
     depends_on:
@@ -124,14 +24,4 @@ services:
       SPRING_PROFILES_ACTIVE: docker
     depends_on:
       - eureka-server
-      - ms-carrito
       - ms-productos
-      - ms-descuentos
-      - ms-pagos
-      - ms-envios
-      - ms-order
-      - ms-reviews
-      - ms-subscriptions
-      - ms-tickets
-      - ms-users
-      - ms-wishlist
