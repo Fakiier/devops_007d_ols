@@ -1,27 +1,30 @@
 services:
-  eureka-server:
-    build: ./server/server
-    container_name: eureka-server
+  mysql:
+    image: mysql:8.0
+    container_name: mysql-productos
+    environment:
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+      MYSQL_DATABASE: db_productos
     ports:
-      - "8761:8761"
-      
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   ms-productos:
-    build: ./ms-productos
+    build: .
     container_name: ms-productos
     ports:
       - "9095:9095"
     environment:
       SPRING_PROFILES_ACTIVE: docker
     depends_on:
-      - eureka-server
+      mysql:
+        condition: service_healthy
 
-  gateway:
-    build: ./gateway
-    container_name: gateway
-    ports:
-      - "8080:8080"
-    environment:
-      SPRING_PROFILES_ACTIVE: docker
-    depends_on:
-      - eureka-server
-      - ms-productos
+volumes:
+  mysql_data:
