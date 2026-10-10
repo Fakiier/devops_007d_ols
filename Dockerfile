@@ -11,7 +11,7 @@ RUN ./mvnw clean package -DskipTests
 FROM eclipse-temurin:21-jre
 WORKDIR /app
 RUN useradd -r -u 1001 appuser && mkdir -p /app/logs && chown -R appuser /app
-COPY --from=build /app/target/*.jar app.jar
-User appuser
+COPY --from=build --chown=appuser /app/target/*.jar app.jar
+USER appuser
 EXPOSE 9095
 ENTRYPOINT ["java","-jar","app.jar"]

@@ -6,7 +6,7 @@ services:
       MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
       MYSQL_DATABASE: ${MYSQL_DATABASE}
     ports:
-      - "3306:3306"
+      - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
@@ -23,10 +23,22 @@ services:
       - "9095:9095"
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE}
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ""
     depends_on:
       mysql:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/9095"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    volumes:
+      - app_logs:/app/logs
     restart: unless-stopped
 
 volumes:
   mysql_data:
+  app_logs:
