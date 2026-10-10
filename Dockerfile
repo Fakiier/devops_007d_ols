@@ -10,7 +10,7 @@ RUN ./mvnw clean package -DskipTests
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
-RUN useradd -r -u 10001 appuser
+RUN useradd -r -u 1001 appuser && mkdir -p /app/logs && chown -R appuser /app
 COPY --from=build /app/target/*.jar app.jar
 User appuser
 EXPOSE 9095
