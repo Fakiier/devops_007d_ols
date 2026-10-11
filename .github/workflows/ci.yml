@@ -93,4 +93,5 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ env.IMAGE
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ github.sha }}
