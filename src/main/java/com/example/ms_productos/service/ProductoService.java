@@ -56,12 +56,17 @@ public class ProductoService {
             throw new DuplicateProductException("Ya existe un producto con el nombre: " + productoDTO.getNombre());
         }
 
+        if (productoDTO.getStock() != null && productoDTO.getStock() < 0) {
+            log.warn("Intento de crear producto con stock negativo - Nombre: {}, Stock: {}",
+                    productoDTO.getNombre(), productoDTO.getStock());
+            throw new InvalidProductDataException("El stock no puede ser negativo");
+        }
+
         Producto producto = Producto.builder()
                 .nombre(productoDTO.getNombre())
                 .categoria(productoDTO.getCategoria())
                 .precio(productoDTO.getPrecio())
                 .descripcion(productoDTO.getDescripcion())
-                //.imagenUrl(productoDTO.getImagenUrl())
                 .stock(productoDTO.getStock() != null ? productoDTO.getStock() : 0)
                 .build();
 
@@ -148,7 +153,7 @@ public class ProductoService {
         log.info("Stock actualizado - Producto: {}, Nuevo stock: {}", producto.getNombre(), producto.getStock());
     }
 
-    public boolean productExist(Long id) {
+    public boolean productExists(Long id) {
         log.debug("Verificando existencia de producto - ID: {}", id);
         boolean exists = productoRepository.existsById(id);
         log.debug("Producto ID: {} - Existe: {}", id, exists);
