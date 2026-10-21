@@ -126,7 +126,7 @@ jobs:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
       - name: Snyk Code - analisis estatico del codigo
-        run: snyk code test --severity-threshold=high
+        run: snyk code test --org=fakiier --severity-threshold=high
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
