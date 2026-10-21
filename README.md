@@ -94,16 +94,20 @@ aplicación se guardan en los volúmenes `mysql_data` y `app_logs`, así que no 
 
 ## 6. Automatización con GitHub Actions (CI/CD)
 
-El repositorio cuenta con un workflow en `.github/workflows/ci.yml` que se ejecuta 
-automáticamente con cada `push` a ramas `feature/**` y `develop`, y con cada 
-`pull request` hacia `develop` o `main`. Usa Java 21 (distribución Temurin) y tiene cuatro jobs:
+El repositorio cuenta con un workflow en `.github/workflows/ci.yml` que se ejecuta
+automáticamente con cada `push` a ramas `feature/**`, `develop` y `main`, y con cada
+`pull request` hacia `develop` o `main`. Usa Java 21 (distribución Temurin) y tiene seis jobs:
 
 | Job | Qué hace |
 |---|---|
 | `build` | Descarga el código, configura Java 21 y compila el proyecto con Maven |
 | `test` | Ejecuta las pruebas unitarias, genera el reporte HTML y lo sube como artefacto |
 | `docker-build` | Construye las imágenes con Docker Compose (solo si `build` y `test` pasan) |
-| `push-ghcr` | Publica la imagen en ghcr.io (solo en `push`) |
+| `security` | Analiza las dependencias con Snyk (`snyk test`) y el código con Snyk Code; falla si hay vulnerabilidades altas o críticas que no estén aceptadas en el archivo `.snyk` |
+| `push-ghcr` | Publica la imagen en ghcr.io (solo en `push` a `develop` o `main`, y solo si `docker-build` y `security` pasan) |
+| `deploy` | Descarga la imagen publicada, la despliega con Docker Compose en un entorno simulado (`staging` para `develop`, `production` para `main`), espera a que esté `healthy`, hace una prueba de humo y registra la trazabilidad en el resumen de la ejecución |
+
+Si alguna prueba o el análisis de seguridad falla, no se publica ni se despliega la imagen.
 
 Si alguna prueba falla, no se construye ni se publica la imagen.
 
@@ -137,7 +141,7 @@ Queda en `target/reports/surefire.html`. En GitHub, el reporte se descarga desde
 El pipeline publica la imagen en GitHub Container Registry:
 
 ```
-docker pull ghcr.io/fakiier/devops_007d_ols:latest
+docker pull ghcr.io/fakiier/devops_007d_ols:develop
 ```
 
 ## 9. Declaración de Uso de Inteligencia Artificial
