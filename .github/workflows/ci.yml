@@ -121,7 +121,7 @@ jobs:
         uses: snyk/actions/setup@master
 
       - name: Snyk - vulnerabilidades en dependencias
-        run: snyk test --severity-threshold=high -d
+        run: snyk test --org=fakiier --severity-threshold=high -d
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
