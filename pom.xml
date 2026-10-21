@@ -19,6 +19,7 @@
 		<flyway.version>11.8.1</flyway.version>
 		<commons-lang3.version>3.18.0</commons-lang3.version>
 		<jackson-bom.version>2.21.7</jackson-bom.version>
+		<httpclient5.version>5.6.4</httpclient5.version>
 	</properties>
 	<dependencies>
 
