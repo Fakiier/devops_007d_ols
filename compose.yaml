@@ -18,6 +18,7 @@ services:
 
   ms-productos:
     build: .
+    image: ${APP_IMAGE:-ms-productos:local}
     container_name: ms-productos
     ports:
       - "9095:9095"

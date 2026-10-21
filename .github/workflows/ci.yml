@@ -6,15 +6,22 @@ on:
   pull_request:
     branches: [ develop, main ]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Descargar el codigo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Configurar Java 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: '21'
           distribution: 'temurin'
@@ -27,10 +34,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Descargar el codigo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Configurar Java 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: '21'
           distribution: 'temurin'
@@ -62,10 +69,12 @@ jobs:
       packages: write
     steps:
       - name: Descargar el codigo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Nombre de imagen en minusculas
-        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+        run: |
+          echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+          echo "BRANCH_TAG=${GITHUB_REF_NAME//\//-}" >> $GITHUB_ENV
 
       - name: Login en ghcr.io
         uses: docker/login-action@v3
@@ -80,5 +89,103 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ env.IMAGE }}:latest
             ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:${{ env.BRANCH_TAG }}
+
+  security:
+    runs-on: ubuntu-latest
+    if: github.actor != 'dependabot[bot]'
+    steps:
+      - name: Descargar el codigo
+        uses: actions/checkout@v7
+
+      - name: Configurar Java 21
+        uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Instalar Snyk CLI
+        uses: snyk/actions/setup@master
+
+      - name: Snyk - vulnerabilidades en dependencias
+        run: snyk test --org=fakiier --severity-threshold=high -d
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+      - name: Snyk Code - analisis estatico del codigo
+        run: snyk code test --org=fakiier --severity-threshold=high
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+      - name: Alerta si falla el analisis
+        if: failure()
+        run: |
+          echo "### Analisis de seguridad fallido" >> $GITHUB_STEP_SUMMARY
+          echo "Snyk encontro vulnerabilidades de severidad alta o critica. El pipeline queda bloqueado: no se publica ni se despliega la imagen." >> $GITHUB_STEP_SUMMARY
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: push-ghcr
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main')
+    environment:
+      name: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Descargar el codigo
+        uses: actions/checkout@v7
+
+      - name: Preparar variables
+        run: |
+          echo "APP_IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}:${GITHUB_SHA}" >> $GITHUB_ENV
+          cp .env.example .env
+
+      - name: Login en ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Descargar la imagen publicada por el pipeline
+        run: docker pull "$APP_IMAGE"
+
+      - name: Desplegar con Docker Compose
+        run: docker compose up -d --no-build
+
+      - name: Esperar a que ms-productos este healthy
+        run: |
+          for i in $(seq 1 40); do
+            status=$(docker inspect --format '{{.State.Health.Status}}' ms-productos 2>/dev/null || echo "none")
+            echo "intento $i: $status"
+            [ "$status" = "healthy" ] && exit 0
+            sleep 5
+          done
+          echo "ms-productos no quedo healthy"
+          exit 1
+
+      - name: Prueba de humo
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:9095/api/v1/productos)
+          echo "HTTP $code"
+          case "$code" in 200|401|403) exit 0 ;; *) exit 1 ;; esac
+
+      - name: Logs si el despliegue falla
+        if: failure()
+        run: docker compose logs
+
+      - name: Registrar trazabilidad
+        run: |
+          {
+            echo "### Despliegue en ${{ github.ref_name }}"
+            echo "- Commit: ${{ github.sha }}"
+            echo "- Imagen: $APP_IMAGE"
+            echo "- Ejecucion: ${{ github.run_id }}"
+          } >> $GITHUB_STEP_SUMMARY
+
+      - name: Limpiar
+        if: always()
+        run: docker compose down -v
