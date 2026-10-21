@@ -2,7 +2,7 @@ name: CI - ms-productos
 
 on:
   push:
-    branches: [ "feature/**", develop ]
+    branches: [ "feature/**", develop, main ]
   pull_request:
     branches: [ develop, main ]
 
@@ -53,22 +53,9 @@ jobs:
             target/site
             target/surefire-reports
 
-  docker-build:
-    runs-on: ubuntu-latest
-    needs: [build, test]
-    steps:
-      - name: Descargar el codigo
-        uses: actions/checkout@v4
-
-      - name: Crear .env desde el ejemplo
-        run: cp .env.example .env
-
-      - name: Construir imagenes
-        run: docker compose build
-
   push-ghcr:
     runs-on: ubuntu-latest
-    needs: docker-build
+    needs: [build, test]
     if: github.event_name == 'push'
     permissions:
       contents: read
