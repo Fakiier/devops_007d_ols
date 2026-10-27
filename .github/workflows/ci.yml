@@ -60,37 +60,22 @@ jobs:
             target/site
             target/surefire-reports
 
-  push-ghcr:
+  docker-build:
     runs-on: ubuntu-latest
-    needs: [ build, test, security ]
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main')
-    permissions:
-      contents: read
-      packages: write
+    needs: [ build, test ]
     steps:
       - name: Descargar el codigo
         uses: actions/checkout@v7
 
-      - name: Nombre de imagen en minusculas
-        run: |
-          echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
-          echo "BRANCH_TAG=${GITHUB_REF_NAME//\//-}" >> $GITHUB_ENV
+      - name: Configurar Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Login en ghcr.io
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Construir y subir imagen
+      - name: Construir imagen (sin publicar)
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: true
-          tags: |
-            ${{ env.IMAGE }}:${{ github.sha }}
-            ${{ env.IMAGE }}:${{ env.BRANCH_TAG }}
+          push: false
+          tags: ms-productos:ci
 
   security:
     runs-on: ubuntu-latest
@@ -125,6 +110,38 @@ jobs:
           echo "### Analisis de seguridad fallido" >> $GITHUB_STEP_SUMMARY
           echo "Snyk encontro vulnerabilidades de severidad alta o critica. El pipeline queda bloqueado: no se publica ni se despliega la imagen." >> $GITHUB_STEP_SUMMARY
 
+  push-ghcr:
+    runs-on: ubuntu-latest
+    needs: [ build, test, security ]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main')
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Descargar el codigo
+        uses: actions/checkout@v7
+
+      - name: Nombre de imagen en minusculas
+        run: |
+          echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+          echo "BRANCH_TAG=${GITHUB_REF_NAME//\//-}" >> $GITHUB_ENV
+
+      - name: Login en ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Construir y subir imagen
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:${{ env.BRANCH_TAG }}
+
   deploy:
     runs-on: ubuntu-latest
     needs: push-ghcr
@@ -142,6 +159,7 @@ jobs:
         run: |
           echo "APP_IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}:${GITHUB_SHA}" >> $GITHUB_ENV
           cp .env.example .env
+          sed -i "s/^MYSQL_ROOT_PASSWORD=.*/MYSQL_ROOT_PASSWORD=$(openssl rand -hex 16)/" .env
 
       - name: Login en ghcr.io
         uses: docker/login-action@v3
