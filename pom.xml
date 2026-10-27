@@ -20,6 +20,7 @@
 		<commons-lang3.version>3.18.0</commons-lang3.version>
 		<jackson-bom.version>2.21.7</jackson-bom.version>
 		<httpclient5.version>5.6.4</httpclient5.version>
+		<tomcat.version>10.1.61</tomcat.version>
 	</properties>
 	<dependencies>
 
