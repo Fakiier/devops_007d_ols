@@ -1,6 +1,12 @@
 services:
   mysql:
     image: mysql:8.0
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768M
     container_name: mysql-productos
     environment:
       MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
@@ -27,6 +33,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE}
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: ""
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=70.0"
     depends_on:
       mysql:
         condition: service_healthy
@@ -39,6 +46,13 @@ services:
     volumes:
       - app_logs:/app/logs
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768M
+        reservations:
+          memory: 384M
 
 volumes:
   mysql_data:
