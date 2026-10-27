@@ -8,7 +8,7 @@ RUN ./mvnw dependency:go-offline -B
 COPY src ./src
 RUN ./mvnw clean package -DskipTests
 
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:24-jre
 WORKDIR /app
 RUN useradd -r -u 1001 appuser && mkdir -p /app/logs && chown -R appuser /app
 COPY --from=build --chown=appuser /app/target/*.jar app.jar
