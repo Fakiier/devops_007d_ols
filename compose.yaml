@@ -1,22 +1,24 @@
 services:
   mysql:
     image: mysql:8.0
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: "1.0"
-          memory: 768M
     container_name: mysql-productos
+    restart: unless-stopped
     environment:
-      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
     ports:
       - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+    networks:
+      - red-productos
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768M
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--protocol=tcp"]
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 --protocol=tcp -p$$MYSQL_ROOT_PASSWORD"]
       interval: 5s
       timeout: 5s
       retries: 15
@@ -32,11 +34,13 @@ services:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE}
       SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: ""
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=70.0"
     depends_on:
       mysql:
         condition: service_healthy
+    networks:
+      - red-productos
     healthcheck:
       test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/9095"]
       interval: 10s
@@ -53,6 +57,9 @@ services:
           memory: 768M
         reservations:
           memory: 384M
+
+networks:
+  red-productos:
 
 volumes:
   mysql_data:
