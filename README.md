@@ -110,6 +110,45 @@ Si alguna prueba, la cobertura mínima o el análisis de seguridad falla, no se 
 
 **Nota sobre cobertura de código:** el proyecto incluye el plugin JaCoCo con una 
 regla de cobertura mínima de 80%, en evaluaciones anteriores esto se ignoró usando un skip y simplemente teniendo aproximadamente un 48% de cobertura, para su mejor funcionamiento hemos decidido ampliar este porcentaje hasta un 81%.
+### 6.1 Trazabilidad y calidad
+
+#### Flujo del pipeline
+
+```mermaid
+flowchart LR
+    A[Commit / Pull Request] --> B[build]
+    A --> C[test + JaCoCo + reporte HTML]
+    A --> D[security: Snyk]
+    B --> E[push-ghcr]
+    C --> E
+    D --> E
+    E --> F[deploy: staging / production]
+```
+
+#### Cómo se garantiza la trazabilidad
+
+Cada cambio se puede seguir desde el commit hasta el entorno desplegado:
+
+| Etapa | Evidencia |
+|---|---|
+| Código | Commit con su SHA, en una rama `feature/*`, `develop` o `main`, y Pull Request revisado por el otro integrante |
+| Pipeline | Ejecución en la pestaña **Actions**, identificada por su `run_id` |
+| Imagen | Publicada en ghcr.io con dos tags: el **SHA del commit** (`ghcr.io/fakiier/devops_007d_ols:<sha>`) y el nombre de la rama (`develop` o `main`) |
+| Despliegue | El job `deploy` descarga la imagen **por SHA**, así que lo que se despliega es exactamente lo que construyó y validó el pipeline para ese commit |
+| Registro | Al terminar el despliegue, el resumen de la ejecución (*Summary*) lista rama, commit, imagen y número de ejecución |
+| Entorno | `develop` se despliega en el entorno `staging` y `main` en `production`, ambos visibles en la sección **Environments** de GitHub |
+| Pruebas | El reporte HTML queda como artefacto (`reporte-pruebas-html`) en cada ejecución |
+
+#### Cómo se garantiza la calidad
+
+- **Pruebas automatizadas:** 44 pruebas con JUnit 5 y Mockito se ejecutan en cada push y Pull Request. Si una falla, el job `test` falla y no se publica nada.
+- **Cobertura mínima:** JaCoCo exige al menos 80% de cobertura de líneas. Si no se cumple, el job `test` falla.
+- **Análisis de seguridad:** el job `security` ejecuta Snyk sobre las dependencias y sobre el código, y falla ante vulnerabilidades de severidad alta o crítica.
+- **Bloqueo en cadena:** `push-ghcr` solo corre si `build`, `test` y `security` pasan, y `deploy` solo corre si `push-ghcr` termina bien. Un fallo en cualquier etapa impide que la imagen se publique o se despliegue.
+- **Excepciones controladas:** las vulnerabilidades que hoy no tienen corrección sin migrar a Spring Boot 4 están documentadas una a una en el archivo `.snyk`, con su justificación y fecha de vencimiento (2026-12-31), para revisarlas antes de esa fecha.
+- **Dependencias al día:** Dependabot revisa semanalmente Maven, Docker y GitHub Actions y abre Pull Requests con las actualizaciones.
+- **Verificación del despliegue:** después de levantar el entorno con Docker Compose, el pipeline espera a que el servicio esté `healthy` y ejecuta una prueba de humo contra la API. Si falla, el despliegue falla.
+- **Control de cambios:** los cambios entran por Pull Request con el pipeline en verde y revisión del otro integrante. Los permisos del workflow están limitados a lectura, salvo la publicación de paquetes.
 
 ## 7. Pruebas unitarias y reporte HTML
 
