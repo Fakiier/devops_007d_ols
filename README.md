@@ -11,8 +11,8 @@ GitHub Actions, y la ejecución del microservicio con Docker Compose.
 
 **Integrantes:** Javier Romero (Fakiier) — Catalina Campos (miucat05)
 
-**Stack técnico:** Java 21, Spring Boot 3.4.4, Maven, MySQL (producción) / H2 (tests), 
-Spring Security con JWT, Eureka Client, Flyway, JaCoCo, Docker y Docker Compose.
+**Stack técnico:** Java 21, Spring Boot 3.5.15, Maven, MySQL (producción) / H2 (tests), 
+Spring Security con JWT, Eureka Client, Flyway, JaCoCo, Snyk, Dependabot, Docker y Docker Compose.
 
 ## 2. Estrategia de Ramificación y Justificación
 
@@ -94,39 +94,76 @@ aplicación se guardan en los volúmenes `mysql_data` y `app_logs`, así que no 
 
 ## 6. Automatización con GitHub Actions (CI/CD)
 
-El repositorio cuenta con un workflow en `.github/workflows/ci.yml` que se ejecuta 
-automáticamente con cada `push` a ramas `feature/**` y `develop`, y con cada 
-`pull request` hacia `develop` o `main`. Usa Java 21 (distribución Temurin) y tiene cuatro jobs:
+El repositorio cuenta con un workflow en `.github/workflows/ci.yml` que se ejecuta
+automáticamente con cada `push` a ramas `feature/**`, `develop` y `main`, y con cada
+`pull request` hacia `develop` o `main`. Usa Java 21 (distribución Temurin) y tiene cinco jobs:
 
 | Job | Qué hace |
 |---|---|
 | `build` | Descarga el código, configura Java 21 y compila el proyecto con Maven |
-| `test` | Ejecuta las pruebas unitarias, genera el reporte HTML y lo sube como artefacto |
-| `docker-build` | Construye las imágenes con Docker Compose (solo si `build` y `test` pasan) |
-| `push-ghcr` | Publica la imagen en ghcr.io (solo en `push`) |
+| `test` | Ejecuta las pruebas unitarias, verifica la cobertura mínima de JaCoCo, genera el reporte HTML y lo sube como artefacto |
+| `security` | Analiza las dependencias con Snyk (`snyk test`) y el código con Snyk Code; falla si hay vulnerabilidades altas o críticas que no estén aceptadas en el archivo `.snyk` |
+| `push-ghcr` | Construye la imagen Docker y la publica en ghcr.io (solo en `push` a `develop` o `main`, y solo si `build`, `test` y `security` pasan) |
+| `deploy` | Descarga la imagen publicada, la despliega con Docker Compose en un entorno simulado (`staging` para `develop`, `production` para `main`), espera a que esté `healthy`, hace una prueba de humo y registra la trazabilidad en el resumen de la ejecución |
 
-Si alguna prueba falla, no se construye ni se publica la imagen.
+Si alguna prueba, la cobertura mínima o el análisis de seguridad falla, no se publica ni se despliega la imagen.
 
 **Nota sobre cobertura de código:** el proyecto incluye el plugin JaCoCo con una 
-regla de cobertura mínima de 80%. Dado que el objetivo de esta etapa del 
-pipeline es validar la integración y automatización del flujo (no alcanzar un 
-porcentaje específico de cobertura), se optó por omitir la verificación estricta 
-de este umbral en el pipeline (`-Djacoco.skip=true`), manteniendo la ejecución 
-real de los tests como parte de la validación de cada cambio.
+regla de cobertura mínima de 80%, en evaluaciones anteriores esto se ignoró usando un skip y simplemente teniendo aproximadamente un 48% de cobertura, para su mejor funcionamiento hemos decidido ampliar este porcentaje hasta un 81%.
+### 6.1 Trazabilidad y calidad
+
+#### Flujo del pipeline
+
+```mermaid
+flowchart LR
+    A[Commit / Pull Request] --> B[build]
+    A --> C[test + JaCoCo + reporte HTML]
+    A --> D[security: Snyk]
+    B --> E[push-ghcr]
+    C --> E
+    D --> E
+    E --> F[deploy: staging / production]
+```
+
+#### Cómo se garantiza la trazabilidad
+
+Cada cambio se puede seguir desde el commit hasta el entorno desplegado:
+
+| Etapa | Evidencia |
+|---|---|
+| Código | Commit con su SHA, en una rama `feature/*`, `develop` o `main`, y Pull Request revisado por el otro integrante |
+| Pipeline | Ejecución en la pestaña **Actions**, identificada por su `run_id` |
+| Imagen | Publicada en ghcr.io con dos tags: el **SHA del commit** (`ghcr.io/fakiier/devops_007d_ols:<sha>`) y el nombre de la rama (`develop` o `main`) |
+| Despliegue | El job `deploy` descarga la imagen **por SHA**, así que lo que se despliega es exactamente lo que construyó y validó el pipeline para ese commit |
+| Registro | Al terminar el despliegue, el resumen de la ejecución (*Summary*) lista rama, commit, imagen y número de ejecución |
+| Entorno | `develop` se despliega en el entorno `staging` y `main` en `production`, ambos visibles en la sección **Environments** de GitHub |
+| Pruebas | El reporte HTML queda como artefacto (`reporte-pruebas-html`) en cada ejecución |
+
+#### Cómo se garantiza la calidad
+
+- **Pruebas automatizadas:** 44 pruebas con JUnit 5 y Mockito se ejecutan en cada push y Pull Request. Si una falla, el job `test` falla y no se publica nada.
+- **Cobertura mínima:** JaCoCo exige al menos 80% de cobertura de líneas. Si no se cumple, el job `test` falla.
+- **Análisis de seguridad:** el job `security` ejecuta Snyk sobre las dependencias y sobre el código, y falla ante vulnerabilidades de severidad alta o crítica.
+- **Bloqueo en cadena:** `push-ghcr` solo corre si `build`, `test` y `security` pasan, y `deploy` solo corre si `push-ghcr` termina bien. Un fallo en cualquier etapa impide que la imagen se publique o se despliegue.
+- **Excepciones controladas:** las vulnerabilidades que hoy no tienen corrección sin migrar a Spring Boot 4 están documentadas una a una en el archivo `.snyk`, con su justificación y fecha de vencimiento (2026-12-31), para revisarlas antes de esa fecha.
+- **Dependencias al día:** Dependabot revisa semanalmente Maven, Docker y GitHub Actions y abre Pull Requests con las actualizaciones.
+- **Verificación del despliegue:** después de levantar el entorno con Docker Compose, el pipeline espera a que el servicio esté `healthy` y ejecuta una prueba de humo contra la API. Si falla, el despliegue falla.
+- **Control de cambios:** los cambios entran por Pull Request con el pipeline en verde y revisión del otro integrante. Los permisos del workflow están limitados a lectura, salvo la publicación de paquetes.
 
 ## 7. Pruebas unitarias y reporte HTML
 
-El proyecto tiene 15 pruebas con JUnit 5 y Mockito (`ProductoControllerTest`: 6, 
-`ProductoServiceTest`: 8 y `MsProductosApplicationTests`: 1). Se ejecutan con JDK 21:
+El proyecto tiene 44 pruebas, con esta lista: ProductoControllerTest: 6, ProductoServiceTest: 8, MsProductosApplicationTests: 1, GlobalExceptionHandlerTest: 9, JwtServiceTest: 9, JwtAuthFilterTest: 5 y UserClientTest: 6. Se ejecutan con JDK 21:
 
 ```
-mvnw.cmd test -Djacoco.skip=true
+mvnw.cmd clean test
 ```
+
+El reporte de cobertura queda en target/site/jacoco/index.html
 
 Para generar el reporte HTML localmente:
 
 ```
-mvnw.cmd -Djacoco.skip=true test org.apache.maven.plugins:maven-surefire-report-plugin:3.5.2:report-only
+mvnw.cmd clean test org.apache.maven.plugins:maven-surefire-report-plugin:3.5.2:report-only
 ```
 
 Queda en `target/reports/surefire.html`. En GitHub, el reporte se descarga desde la pestaña 
@@ -137,26 +174,36 @@ Queda en `target/reports/surefire.html`. En GitHub, el reporte se descarga desde
 El pipeline publica la imagen en GitHub Container Registry:
 
 ```
-docker pull ghcr.io/fakiier/devops_007d_ols:latest
+docker pull ghcr.io/fakiier/devops_007d_ols:develop
 ```
 
 ## 9. Declaración de Uso de Inteligencia Artificial
 
-Se utilizó Claude como apoyo para: comprender conceptos de Git/GitFlow 
-y GitHub Actions, resolver errores de configuración del pipeline de CI/CD (versión 
-de Java, umbral de cobertura de JaCoCo, discrepancia de rutas entre controlador y 
-tests), configurar Docker Compose, el job de pruebas con reporte HTML y la publicación 
-en ghcr.io, y tener una estructura basica para el README. Las decisiones finales, el código del proyecto 
-y las justificaciones técnicas fueron hechas por nosotros, los integrantes del grupo.
+**Herramienta utilizada:** Claude (Anthropic).
+
+**En qué se usó:**
+- Evaluación 1 (etapa anterior): comprender conceptos de Git/GitFlow y GitHub Actions, resolver errores de configuración del pipeline (versión de Java, umbral de cobertura de JaCoCo, discrepancia de rutas entre controlador y pruebas), configurar Docker Compose, el job de pruebas con reporte HTML, la publicación en ghcr.io y una estructura base para el README.
+- Evaluación 2 (esta etapa):
+  - Contrastar la rúbrica con el estado del repositorio para detectar elementos faltantes.
+  - Apoyo en la configuración del análisis de seguridad con Snyk (job `security`, archivo `.snyk` y bloqueo del pipeline) y de Dependabot.
+  - Apoyo en el job `deploy` con Docker Compose (healthcheck, prueba de humo y registro de trazabilidad).
+  - Apoyo en los límites de recursos y la gestión de credenciales del `compose.yaml`.
+
+**Cómo se validó:** todo el contenido sugerido fue revisado por ambos integrantes, probado localmente con Docker Compose y Maven, y verificado en las ejecuciones del pipeline en GitHub Actions antes de integrarlo mediante Pull Request. Las decisiones técnicas, el código del proyecto y las justificaciones de las excepciones de seguridad fueron definidas por el equipo.
+
+**Lo que no se hizo con IA:** las conclusiones y las reflexiones individuales de la sección 10 fueron redactadas por cada integrante sin apoyo de IA.
+
 
 ## 10. Reflexiones Individuales
 
 **Javier Romero:**  
-Como reflexión yo diría que los contenidos vistos en esta unidad son de vital importancia en nuestros futuros trabajos, aunque sean un tanto simples, a fin de cuentas son cosas básicas que se ocuparán día a día, por lo que aprenderlas sin dudas ayuda a que nuestra formación como futuros profesionales sea aún más completa.
-Esta herramienta GitFlow nos ayuda a poder ser más organizados a la hora de realizar proyectos que suelen ser más importantes, sobre todo si es en grupos ya que cada uno puede interactuar en su linea y posteriormente acceder a versiones más nuevas o antiguas del código.
+Como reflexión yo diría que los contenidos vistos en esta unidad son de vital importancia en nuestros futuros trabajos, en esta unidad se puso algo más complejo, tuve varios problemas con el código ya que era uno de un ramo anterior que no estaba al 100%, tuve que ir editando sobre la marcha e ir entendiendo lo que requería esta nueva tecnología, a fin de cuentas son cosas básicas que se ocuparán día a día, por lo que aprenderlas sin dudas ayuda a que nuestra formación como futuros profesionales sea aún más completa.
+Con el tiempo me he podido dar cuenta que GitHub es más complejo de lo que esperaba y que tiene más herramientas por lo que claro, a futuro será una herramienta que será vital a la hora de poder trabajar.
 Sobre el tema IA, está claro que hoy en día tenemos que aprender a convivir con ella ya que es una nueva tecnología que llegó para quedarse, pero no por eso nos tenemos que dejar llevar por ella y dejar que haga todo por nosotros, es por ello que en nuestro trabajo se utilizó principalmente como una guía y consultor de errores dejando las decisiones más importantes para el factor humano, o sea, nosotros.
+
 
 **Catalina Campos:**  
 Personalmente, creo que uno de los mayores aprendizajes de esta evaluación y el proceso que conlleva es que al tener un orden en los trabajos, se puede ser mucho mas eficiente. Cada uno por su lado y cuando ya tenemos casi todo hecho, juntarlo no es tan difícil y tampoco vamos sobre escribiendo lo que nuestro compañero hace. Además que tener todo detallado ayuda mucho a la hora de poder comprender de mejor manera el trabajo hecho.
 Tambien en el pull request hace que tengamos al otro para apoyarnos y que tambien vea y revise lo que estamos haciendo, y pueda quiza ver errores o detalles donde yo no los vi. 
 Y sobre el uso de la ia, no esta del todo erroneo utilizarla, siempre y cuando sea para apoyarnos y no hacer solo copia y pega, porque no aprenderiamos nada de esa manera.
+En la Evaluación 2 encuentro que fue mas complicado que la primera, sobre todo el ejecutar los test y lo del Snyk que no lo llegue a entender bien, los trabajos mas que nada tuvimos que seguir un paso a paso viendo las clases y tratando de comprender de mejor manera como funcionan los elementos.

@@ -5,7 +5,7 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>3.4.4</version>
+		<version>3.5.15</version>
 		<relativePath/>
 	</parent>
 	<groupId>com.example</groupId>
@@ -15,7 +15,12 @@
 	<description/>
 	<properties>
 		<java.version>21</java.version>
-		<spring-cloud.version>2024.0.0</spring-cloud.version>
+		<spring-cloud.version>2025.0.0</spring-cloud.version>
+		<flyway.version>11.8.1</flyway.version>
+		<commons-lang3.version>3.18.0</commons-lang3.version>
+		<jackson-bom.version>2.21.7</jackson-bom.version>
+		<httpclient5.version>5.6.4</httpclient5.version>
+		<tomcat.version>10.1.61</tomcat.version>
 	</properties>
 	<dependencies>
 
@@ -136,6 +141,11 @@
 				<version>${spring-cloud.version}</version>
 				<type>pom</type>
 				<scope>import</scope>
+			</dependency>
+			<dependency>
+				<groupId>org.bouncycastle</groupId>
+				<artifactId>bcprov-jdk18on</artifactId>
+				<version>1.86</version>
 			</dependency>
 		</dependencies>
 	</dependencyManagement>
