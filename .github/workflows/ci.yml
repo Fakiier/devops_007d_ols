@@ -44,7 +44,7 @@ jobs:
           cache: maven
 
       - name: Ejecutar pruebas unitarias
-        run: mvn -B test -Djacoco.skip=true
+        run: mvn -B test
 
       - name: Generar reporte HTML
         if: always()
