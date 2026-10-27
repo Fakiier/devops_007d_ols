@@ -140,21 +140,31 @@ docker pull ghcr.io/fakiier/devops_007d_ols:develop
 
 ## 9. Declaración de Uso de Inteligencia Artificial
 
-Se utilizó Claude como apoyo para: comprender conceptos de Git/GitFlow 
-y GitHub Actions, resolver errores de configuración del pipeline de CI/CD (versión 
-de Java, umbral de cobertura de JaCoCo, discrepancia de rutas entre controlador y 
-tests), configurar Docker Compose, el job de pruebas con reporte HTML y la publicación 
-en ghcr.io, y tener una estructura basica para el README. Las decisiones finales, el código del proyecto 
-y las justificaciones técnicas fueron hechas por nosotros, los integrantes del grupo.
+**Herramienta utilizada:** Claude (Anthropic).
+
+**En qué se usó:**
+- Evaluación 1 (etapa anterior): comprender conceptos de Git/GitFlow y GitHub Actions, resolver errores de configuración del pipeline (versión de Java, umbral de cobertura de JaCoCo, discrepancia de rutas entre controlador y pruebas), configurar Docker Compose, el job de pruebas con reporte HTML, la publicación en ghcr.io y una estructura base para el README.
+- Evaluación 2 (esta etapa):
+  - Contrastar la rúbrica con el estado del repositorio para detectar elementos faltantes.
+  - Apoyo en la configuración del análisis de seguridad con Snyk (job `security`, archivo `.snyk` y bloqueo del pipeline) y de Dependabot.
+  - Apoyo en el job `deploy` con Docker Compose (healthcheck, prueba de humo y registro de trazabilidad).
+  - Apoyo en los límites de recursos y la gestión de credenciales del `compose.yaml`.
+
+**Cómo se validó:** todo el contenido sugerido fue revisado por ambos integrantes, probado localmente con Docker Compose y Maven, y verificado en las ejecuciones del pipeline en GitHub Actions antes de integrarlo mediante Pull Request. Las decisiones técnicas, el código del proyecto y las justificaciones de las excepciones de seguridad fueron definidas por el equipo.
+
+**Lo que no se hizo con IA:** las conclusiones y las reflexiones individuales de la sección 10 fueron redactadas por cada integrante sin apoyo de IA.
+
 
 ## 10. Reflexiones Individuales
 
 **Javier Romero:**  
-Como reflexión yo diría que los contenidos vistos en esta unidad son de vital importancia en nuestros futuros trabajos, aunque sean un tanto simples, a fin de cuentas son cosas básicas que se ocuparán día a día, por lo que aprenderlas sin dudas ayuda a que nuestra formación como futuros profesionales sea aún más completa.
-Esta herramienta GitFlow nos ayuda a poder ser más organizados a la hora de realizar proyectos que suelen ser más importantes, sobre todo si es en grupos ya que cada uno puede interactuar en su linea y posteriormente acceder a versiones más nuevas o antiguas del código.
+Como reflexión yo diría que los contenidos vistos en esta unidad son de vital importancia en nuestros futuros trabajos, en esta unidad se puso algo más complejo, tuve varios problemas con el código ya que era uno de un ramo anterior que no estaba al 100%, tuve que ir editando sobre la marcha e ir entendiendo lo que requería esta nueva tecnología, a fin de cuentas son cosas básicas que se ocuparán día a día, por lo que aprenderlas sin dudas ayuda a que nuestra formación como futuros profesionales sea aún más completa.
+Con el tiempo me he podido dar cuenta que GitHub es más complejo de lo que esperaba y que tiene más herramientas por lo que claro, a futuro será una herramienta que será vital a la hora de poder trabajar.
 Sobre el tema IA, está claro que hoy en día tenemos que aprender a convivir con ella ya que es una nueva tecnología que llegó para quedarse, pero no por eso nos tenemos que dejar llevar por ella y dejar que haga todo por nosotros, es por ello que en nuestro trabajo se utilizó principalmente como una guía y consultor de errores dejando las decisiones más importantes para el factor humano, o sea, nosotros.
+
 
 **Catalina Campos:**  
 Personalmente, creo que uno de los mayores aprendizajes de esta evaluación y el proceso que conlleva es que al tener un orden en los trabajos, se puede ser mucho mas eficiente. Cada uno por su lado y cuando ya tenemos casi todo hecho, juntarlo no es tan difícil y tampoco vamos sobre escribiendo lo que nuestro compañero hace. Además que tener todo detallado ayuda mucho a la hora de poder comprender de mejor manera el trabajo hecho.
 Tambien en el pull request hace que tengamos al otro para apoyarnos y que tambien vea y revise lo que estamos haciendo, y pueda quiza ver errores o detalles donde yo no los vi. 
 Y sobre el uso de la ia, no esta del todo erroneo utilizarla, siempre y cuando sea para apoyarnos y no hacer solo copia y pega, porque no aprenderiamos nada de esa manera.
+En la Evaluación 2 encuentro que fue mas complicado que la primera, sobre todo el ejecutar los test y lo del Snyk que no lo llegue a entender bien, los trabajos mas que nada tuvimos que seguir un paso a paso viendo las clases y tratando de comprender de mejor manera como funcionan los elementos.
