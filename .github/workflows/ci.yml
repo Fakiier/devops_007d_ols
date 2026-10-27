@@ -206,4 +206,4 @@ jobs:
 
       - name: Limpiar
         if: always()
-        run: docker compose down -v
+        run: docker compose down
