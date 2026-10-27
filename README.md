@@ -11,8 +11,8 @@ GitHub Actions, y la ejecución del microservicio con Docker Compose.
 
 **Integrantes:** Javier Romero (Fakiier) — Catalina Campos (miucat05)
 
-**Stack técnico:** Java 21, Spring Boot 3.4.4, Maven, MySQL (producción) / H2 (tests), 
-Spring Security con JWT, Eureka Client, Flyway, JaCoCo, Docker y Docker Compose.
+**Stack técnico:** Java 21, Spring Boot 3.5.15, Maven, MySQL (producción) / H2 (tests), 
+Spring Security con JWT, Eureka Client, Flyway, JaCoCo, Snyk, Dependabot, Docker y Docker Compose.
 
 ## 2. Estrategia de Ramificación y Justificación
 
@@ -96,41 +96,35 @@ aplicación se guardan en los volúmenes `mysql_data` y `app_logs`, así que no 
 
 El repositorio cuenta con un workflow en `.github/workflows/ci.yml` que se ejecuta
 automáticamente con cada `push` a ramas `feature/**`, `develop` y `main`, y con cada
-`pull request` hacia `develop` o `main`. Usa Java 21 (distribución Temurin) y tiene seis jobs:
+`pull request` hacia `develop` o `main`. Usa Java 21 (distribución Temurin) y tiene cinco jobs:
 
 | Job | Qué hace |
 |---|---|
 | `build` | Descarga el código, configura Java 21 y compila el proyecto con Maven |
-| `test` | Ejecuta las pruebas unitarias, genera el reporte HTML y lo sube como artefacto |
-| `docker-build` | Construye las imágenes con Docker Compose (solo si `build` y `test` pasan) |
+| `test` | Ejecuta las pruebas unitarias, verifica la cobertura mínima de JaCoCo, genera el reporte HTML y lo sube como artefacto |
 | `security` | Analiza las dependencias con Snyk (`snyk test`) y el código con Snyk Code; falla si hay vulnerabilidades altas o críticas que no estén aceptadas en el archivo `.snyk` |
-| `push-ghcr` | Publica la imagen en ghcr.io (solo en `push` a `develop` o `main`, y solo si `docker-build` y `security` pasan) |
+| `push-ghcr` | Construye la imagen Docker y la publica en ghcr.io (solo en `push` a `develop` o `main`, y solo si `build`, `test` y `security` pasan) |
 | `deploy` | Descarga la imagen publicada, la despliega con Docker Compose en un entorno simulado (`staging` para `develop`, `production` para `main`), espera a que esté `healthy`, hace una prueba de humo y registra la trazabilidad en el resumen de la ejecución |
 
-Si alguna prueba o el análisis de seguridad falla, no se publica ni se despliega la imagen.
-
-Si alguna prueba falla, no se construye ni se publica la imagen.
+Si alguna prueba, la cobertura mínima o el análisis de seguridad falla, no se publica ni se despliega la imagen.
 
 **Nota sobre cobertura de código:** el proyecto incluye el plugin JaCoCo con una 
-regla de cobertura mínima de 80%. Dado que el objetivo de esta etapa del 
-pipeline es validar la integración y automatización del flujo (no alcanzar un 
-porcentaje específico de cobertura), se optó por omitir la verificación estricta 
-de este umbral en el pipeline (`-Djacoco.skip=true`), manteniendo la ejecución 
-real de los tests como parte de la validación de cada cambio.
+regla de cobertura mínima de 80%, en evaluaciones anteriores esto se ignoró usando un skip y simplemente teniendo aproximadamente un 48% de cobertura, para su mejor funcionamiento hemos decidido ampliar este porcentaje hasta un 81%.
 
 ## 7. Pruebas unitarias y reporte HTML
 
-El proyecto tiene 15 pruebas con JUnit 5 y Mockito (`ProductoControllerTest`: 6, 
-`ProductoServiceTest`: 8 y `MsProductosApplicationTests`: 1). Se ejecutan con JDK 21:
+El proyecto tiene 44 pruebas, con esta lista: ProductoControllerTest: 6, ProductoServiceTest: 8, MsProductosApplicationTests: 1, GlobalExceptionHandlerTest: 9, JwtServiceTest: 9, JwtAuthFilterTest: 5 y UserClientTest: 6. Se ejecutan con JDK 21:
 
 ```
-mvnw.cmd test -Djacoco.skip=true
+mvnw.cmd clean test
 ```
+
+El reporte de cobertura queda en target/site/jacoco/index.html
 
 Para generar el reporte HTML localmente:
 
 ```
-mvnw.cmd -Djacoco.skip=true test org.apache.maven.plugins:maven-surefire-report-plugin:3.5.2:report-only
+mvnw.cmd clean test org.apache.maven.plugins:maven-surefire-report-plugin:3.5.2:report-only
 ```
 
 Queda en `target/reports/surefire.html`. En GitHub, el reporte se descarga desde la pestaña 
