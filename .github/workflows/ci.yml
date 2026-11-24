@@ -77,6 +77,7 @@ jobs:
           push: false
           tags: ms-productos:ci
 
+
   security:
     runs-on: ubuntu-latest
     if: github.actor != 'dependabot[bot]'
@@ -91,16 +92,19 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
+      - name: Verificar Maven disponible
+        run: mvn -version
+
       - name: Instalar Snyk CLI
         uses: snyk/actions/setup@master
 
       - name: Snyk - vulnerabilidades en dependencias
-        run: snyk test --org=fakiier --severity-threshold=high -d
+        run: snyk test --maven-skip-wrapper --severity-threshold=high
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
       - name: Snyk Code - analisis estatico del codigo
-        run: snyk code test --org=fakiier --severity-threshold=high
+        run: snyk code test --severity-threshold=high
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
@@ -108,7 +112,8 @@ jobs:
         if: failure()
         run: |
           echo "### Analisis de seguridad fallido" >> $GITHUB_STEP_SUMMARY
-          echo "Snyk encontro vulnerabilidades de severidad alta o critica. El pipeline queda bloqueado: no se publica ni se despliega la imagen." >> $GITHUB_STEP_SUMMARY
+          echo "Snyk encontro vulnerabilidades de severidad alta o critica, o no pudo completar el analisis. El pipeline queda bloqueado." >> $GITHUB_STEP_SUMMARY
+  
 
   push-ghcr:
     runs-on: ubuntu-latest
