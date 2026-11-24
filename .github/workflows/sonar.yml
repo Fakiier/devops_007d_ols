@@ -1,14 +1,10 @@
 name: SonarQube
 
+# El plan gratuito de SonarQube Cloud solo analiza la rama principal (main).
 on:
   push:
     branches:
       - main
-      - develop
-      - "feature/**"
-  pull_request:
-    branches: [ develop, main ]
-    types: [opened, synchronize, reopened]
 
 jobs:
   sonar-scan:
