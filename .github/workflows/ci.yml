@@ -68,7 +68,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Configurar Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Construir imagen (sin publicar)
         uses: docker/build-push-action@v6
