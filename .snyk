@@ -127,3 +127,51 @@ ignore:
     - '*':
         reason: 'logback-core y jaxb-core llegan por spring-boot-starter-data-jpa. Snyk indica que el arreglo requiere migrar a Spring Boot 4. No lo aplicamos ahora porque eso podría llevar a generar más errores dentro del código y conflicto con las versiones. Después de la entrega, se evaluará empezar la migración teniendo en cuenta todo lo anterior y buscando la mejor manera posible para llegar a ello sin mayores problemas.'
         expires: '2026-12-31T00:00:00.000Z'
+
+  # Spring Framework y Boot (vulnerabilidades nuevas de Snyk, arreglo en Spring Boot 4)
+  SNYK-JAVA-ORGSPRINGFRAMEWORK-22727152:
+    - '*':
+        reason: 'Snyk indica que el arreglo requiere Spring Boot 4'
+        expires: '2026-12-31T00:00:00.000Z'
+  SNYK-JAVA-ORGSPRINGFRAMEWORK-22727191:
+    - '*':
+        reason: 'Snyk indica que el arreglo requiere Spring Boot 4'
+        expires: '2026-12-31T00:00:00.000Z'
+  SNYK-JAVA-ORGSPRINGFRAMEWORK-22727208:
+    - '*':
+        reason: 'Snyk indica que el arreglo requiere Spring Boot 4'
+        expires: '2026-12-31T00:00:00.000Z'
+  SNYK-JAVA-ORGSPRINGFRAMEWORK-22727209:
+    - '*':
+        reason: 'Snyk indica que el arreglo requiere Spring Boot 4'
+        expires: '2026-12-31T00:00:00.000Z'
+  SNYK-JAVA-ORGSPRINGFRAMEWORKHATEOAS-22731243:
+    - '*':
+        reason: 'Snyk indica que el arreglo requiere Spring Boot 4'
+        expires: '2026-12-31T00:00:00.000Z'
+  SNYK-JAVA-ORGSPRINGFRAMEWORKBOOT-22756768:
+    - '*':
+        reason: 'Snyk indica que el arreglo requiere Spring Boot 4'
+        expires: '2026-12-31T00:00:00.000Z'
+  SNYK-JAVA-ORGSPRINGFRAMEWORKSECURITY-22729313:
+    - '*':
+        reason: 'Snyk indica que el arreglo requiere Spring Boot 4'
+        expires: '2026-12-31T00:00:00.000Z'
+  # Jackson via logstash-logback-encoder
+  SNYK-JAVA-COMFASTERXMLJACKSONCORE-21761837:
+    - '*':
+        reason: 'llega por logstash-logback-encoder 7.4. Snyk propone subir a la 9.0, pero ya lo probamos y trajo 13 vulnerabilidades nuevas de Jackson 3, así que se revirtió'
+        expires: '2026-12-31T00:00:00.000Z'
+  # Spring Boot Actuator (agregado en EP3 para observabilidad)
+  SNYK-JAVA-ORGSPRINGFRAMEWORKBOOT-22729051:
+    - '*':
+        reason: 'se agregó para Prometheus. Solo se exponen health, info y prometheus, no hay env ni heapdump, y el arreglo requiere Boot 4.'
+        expires: '2026-12-31T00:00:00.000Z'
+  SNYK-JAVA-ORGSPRINGFRAMEWORKBOOT-22729029:
+    - '*':
+        reason: 'se agregó para Prometheus. Solo se exponen health, info y prometheus, no hay env ni heapdump, y el arreglo requiere Boot 4.'
+        expires: '2026-12-31T00:00:00.000Z'
+  SNYK-JAVA-ORGSPRINGFRAMEWORKBOOT-22756767:
+    - '*':
+        reason: 'se agregó para Prometheus. Solo se exponen health, info y prometheus, no hay env ni heapdump, y el arreglo requiere Boot 4.'
+        expires: '2026-12-31T00:00:00.000Z'
