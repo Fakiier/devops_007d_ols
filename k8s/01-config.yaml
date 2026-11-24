@@ -1,0 +1,23 @@
+# Configuracion del microservicio (equivale al environment de compose.yaml)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ms-productos-config
+  namespace: app
+data:
+  SPRING_PROFILES_ACTIVE: "docker"
+  SPRING_DATASOURCE_URL: "jdbc:mysql://mysql:3306/db_productos"
+  SPRING_DATASOURCE_USERNAME: "root"
+  JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=70.0"
+  MYSQL_DATABASE: "db_productos"
+---
+# SOLO PARA PRUEBAS LOCALES. En el pipeline la clave se genera con openssl
+# y se crea con: kubectl create secret generic mysql-secret ...
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mysql-secret
+  namespace: app
+type: Opaque
+stringData:
+  MYSQL_ROOT_PASSWORD: "cambiar-esta-clave"

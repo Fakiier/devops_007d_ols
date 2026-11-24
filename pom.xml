@@ -21,9 +21,17 @@
 		<jackson-bom.version>2.21.7</jackson-bom.version>
 		<httpclient5.version>5.6.4</httpclient5.version>
 		<tomcat.version>10.1.61</tomcat.version>
+		<micrometer.version>1.16.7</micrometer.version>
 	</properties>
 	<dependencies>
-
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-actuator</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>io.micrometer</groupId>
+			<artifactId>micrometer-registry-prometheus</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-data-jpa</artifactId>
