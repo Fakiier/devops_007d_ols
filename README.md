@@ -96,12 +96,13 @@ aplicación se guardan en los volúmenes `mysql_data` y `app_logs`, así que no 
 
 El repositorio cuenta con un workflow en `.github/workflows/ci.yml` que se ejecuta
 automáticamente con cada `push` a ramas `feature/**`, `develop` y `main`, y con cada
-`pull request` hacia `develop` o `main`. Usa Java 21 (distribución Temurin) y tiene cinco jobs:
+`pull request` hacia `develop` o `main`. Usa Java 21 (distribución Temurin) y tiene seis jobs:
 
 | Job | Qué hace |
 |---|---|
 | `build` | Descarga el código, configura Java 21 y compila el proyecto con Maven |
 | `test` | Ejecuta las pruebas unitarias, verifica la cobertura mínima de JaCoCo, genera el reporte HTML y lo sube como artefacto |
+| `docker-build` | Construye la imagen Docker con Buildx sin publicarla; se ejecuta después de `build` y `test` |
 | `security` | Analiza las dependencias con Snyk (`snyk test`) y el código con Snyk Code; falla si hay vulnerabilidades altas o críticas que no estén aceptadas en el archivo `.snyk` |
 | `push-ghcr` | Construye la imagen Docker y la publica en ghcr.io (solo en `push` a `develop` o `main`, y solo si `build`, `test` y `security` pasan) |
 | `deploy` | Descarga la imagen publicada, levanta un clúster de Kubernetes (kind) dentro del workflow, aplica los manifiestos de `k8s/` (namespace `app`, MySQL y `ms-productos`), espera a que los pods estén listos, hace una prueba de humo y registra la trazabilidad. Se ejecuta en un entorno simulado (`staging` para `develop`, `production` para `main`) |
@@ -115,15 +116,17 @@ regla de cobertura mínima de 80%, en evaluaciones anteriores esto se ignoró us
 #### Flujo del pipeline
 
 ```mermaid
-flowchart LR
+flowchart TD
     A[Commit / Pull Request] --> B[build]
     A --> C[test + JaCoCo + reporte HTML]
     A --> D[security: Snyk]
     B --> E[push-ghcr]
     C --> E
     D --> E
-    E --> F[deploy: kind + kubectl apply, staging / production]
-    F --> G[Prometheus + Grafana + Loki]
+    E --> F[deploy: Kind + kubectl]
+    F --> G[Prueba de humo + trazabilidad]
+    H[Observabilidad local: Prometheus + Grafana + Loki]
+    H --> I[Monitoreo de métricas y logs]
 ```
 
 #### Cómo se garantiza la trazabilidad
@@ -137,7 +140,7 @@ Cada cambio se puede seguir desde el commit hasta el entorno desplegado:
 | Imagen | Publicada en ghcr.io con dos tags: el **SHA del commit** (`ghcr.io/fakiier/devops_007d_ols:<sha>`) y el nombre de la rama (`develop` o `main`) |
 | Despliegue | El job `deploy` descarga la imagen **por SHA**, así que lo que se despliega es exactamente lo que construyó y validó el pipeline para ese commit |
 | Registro | Al terminar el despliegue, el resumen de la ejecución (*Summary*) lista rama, commit, imagen y número de ejecución |
-| Entorno | `develop` se despliega en el entorno `staging` y `main` en `production`, ambos visibles en la sección **Environments** de GitHub |
+| Entorno | El job asigna `staging` a `develop` y `production` a `main` mediante GitHub Environments. Son entornos de ejecución del workflow: el clúster Kind se crea temporalmente y no corresponde a infraestructura persistente. |
 | Pruebas | El reporte HTML queda como artefacto (`reporte-pruebas-html`) en cada ejecución |
 
 #### Cómo se garantiza la calidad
@@ -181,7 +184,9 @@ kubectl port-forward -n app svc/ms-productos 9095:9095
 
 Con el túnel abierto, `http://localhost:9095/actuator/health` debe responder `{"status":"UP"}`.
 
-**En el pipeline:** el job `deploy` crea un clúster kind efímero dentro de la ejecución, carga la imagen publicada (por SHA del commit), crea los namespaces `app` y `monitoring`, aplica los manifiestos en este orden (namespace, monitoring y aplicación) y verifica el resultado. Se eligió kind dentro del workflow, y no un runner propio, porque no requiere infraestructura fuera de GitHub y deja el despliegue reproducible en cada push a `develop` o `main`.
+**En el pipeline:** el job `deploy` crea un clúster Kind efímero dentro de GitHub Actions, descarga la imagen publicada en GHCR identificada por el SHA del commit y despliega MySQL y `ms-productos` en el namespace `app`. También crea el namespace `monitoring`, pero el despliegue de sus componentes se omite porque todavía no existen manifiestos en `monitoring/k8s/`. Finalmente, espera a que los deployments estén listos, ejecuta una prueba de humo contra la API y registra la trazabilidad en el resumen de GitHub Actions.
+
+Se eligió Kind porque permite validar el despliegue de Kubernetes sin contratar infraestructura externa. Cada ejecución crea su propio clúster temporal; el despliegue local realizado en el equipo se mantiene independiente.
 
 ### 6.3 Análisis de calidad con SonarQube Cloud (IE5)
 
@@ -211,7 +216,9 @@ El microservicio expone métricas con Spring Boot Actuator y Micrometer en `/act
 
 **Dashboard:** muestra errores 5xx por segundo, uso de CPU, memoria heap, disponibilidad y los logs del servicio. 
 
-> **[Pendiente Javier]** completar: cómo se despliega este stack en Kubernetes (namespace `monitoring`), cómo se llevan al dashboard el tiempo de despliegue y la cobertura de pruebas, y capturas del dashboard.
+**Alcance del monitoreo:** el stack de observabilidad está configurado y probado localmente mediante Docker Compose, utilizando los archivos de `monitoring/`. Actualmente, el pipeline de GitHub Actions no despliega Prometheus, Grafana ni Loki en Kubernetes, ya que aún no existen manifiestos en `monitoring/k8s/`.
+
+**Validación local:** se comprobó que Prometheus recolecta métricas de `ms-productos`, que Grafana carga el dashboard y que es posible consultar los logs mediante Loki y Alloy.
 
 ### 6.5 Cómo se integra cada herramienta y qué decisión permite tomar (IE4)
 
@@ -220,8 +227,8 @@ El microservicio expone métricas con Spring Boot Actuator y Micrometer en `/act
 | Snyk (`security`) | Job del CI en cada push y Pull Request | Si hay vulnerabilidades altas o críticas sin justificar en `.snyk`, no se publica ni se despliega la imagen |
 | JaCoCo (`test`) | Job del CI; mínimo de 80% de líneas | Si la cobertura baja del mínimo, el job falla y no hay merge ni despliegue |
 | SonarQube Cloud (`sonar-scan`) | Workflow `sonar.yml` en la rama principal | Si el quality gate falla, el cambio se corrige antes de entregarse |
-| Kubernetes (`deploy`) | Job `deploy` con kind dentro del workflow | Si los pods no quedan listos o la prueba de humo falla, el despliegue falla |
-| Prometheus y alertas | Métricas de `/actuator/prometheus` | Si el servicio cae o los errores 5xx suben, se investiga y se detiene la promoción |
+| Kubernetes (`deploy`) | Job `deploy` con Kind efímero dentro de GitHub Actions y despliegue local independiente | Si los pods no quedan listos o la prueba de humo falla, el job falla. |
+| Prometheus y alertas | Stack local de observabilidad mediante Docker Compose; recolecta métricas de `/actuator/prometheus` | Si el servicio cae o aumentan los errores 5xx, se investiga y se toman medidas correctivas. |
 | Grafana y Loki | Dashboard y logs | Si la memoria o la CPU suben de forma sostenida, se ajustan los límites del `Deployment` |
 
 ## 7. Pruebas unitarias y reporte HTML
@@ -253,22 +260,15 @@ docker pull ghcr.io/fakiier/devops_007d_ols:develop
 
 ## 9. Declaración de Uso de Inteligencia Artificial
 
-**Herramienta utilizada:** Claude (Anthropic).
+**Herramientas utilizadas:** Claude (Anthropic) y ChatGPT (OpenAI).
 
-**En qué se usó:**
-- Evaluación 1 (etapa anterior): comprender conceptos de Git/GitFlow y GitHub Actions, resolver errores de configuración del pipeline (versión de Java, umbral de cobertura de JaCoCo, discrepancia de rutas entre controlador y pruebas), configurar Docker Compose, el job de pruebas con reporte HTML, la publicación en ghcr.io y una estructura base para el README.
-- Evaluación 2 (esta etapa):
-  - Contrastar la rúbrica con el estado del repositorio para detectar elementos faltantes.
-  - Apoyo en la configuración del análisis de seguridad con Snyk (job `security`, archivo `.snyk` y bloqueo del pipeline) y de Dependabot.
-  - Apoyo en el job `deploy` con Docker Compose (healthcheck, prueba de humo y registro de trazabilidad).
-  - Apoyo en los límites de recursos y la gestión de credenciales del `compose.yaml`.
+**En qué se usaron:**
 
-- Evaluación 3 (esta etapa):
-  - Apoyo en los manifiestos de Kubernetes (`k8s/`), la prueba en kind y el job `deploy` con kind dentro del workflow.
-  - Apoyo en la configuración de SonarQube Cloud (`sonar.yml`) y en el diagnóstico de errores del pipeline y de Git.
-  - Apoyo en el borrador de las secciones 6.2 a 6.5 de este README, que fue revisado y ajustado por el equipo.
+- **Evaluación 1 (etapa anterior):** apoyo para comprender conceptos de Git/GitFlow y GitHub Actions, resolver errores de configuración del pipeline, configurar Docker Compose, las pruebas con reporte HTML, la publicación en GHCR y la estructura inicial del README.
+- **Evaluación 2:** apoyo en la revisión de la rúbrica, configuración del análisis de seguridad con Snyk, Dependabot, controles de calidad y diagnóstico de errores del pipeline.
+- **Evaluación 3:** apoyo en la configuración y revisión de manifiestos de Kubernetes (`k8s/`), instalación y uso de Kind, validación del despliegue local, diagnóstico de errores de GitHub Actions y Kubernetes, revisión de la observabilidad con Prometheus, Grafana, Loki y Alloy, y redacción y corrección de secciones del README.
 
-**Cómo se validó:** todo el contenido sugerido fue revisado por ambos integrantes, probado localmente con Docker Compose y Maven, y verificado en las ejecuciones del pipeline en GitHub Actions antes de integrarlo mediante Pull Request. Las decisiones técnicas, el código del proyecto y las justificaciones de las excepciones de seguridad fueron definidas por el equipo.
+**Cómo se validó:** las sugerencias entregadas por estas herramientas fueron revisadas por los integrantes del equipo. Los comandos y configuraciones se probaron en el entorno local y los resultados se contrastaron con las ejecuciones de GitHub Actions. Las decisiones técnicas, la implementación final y las justificaciones de las excepciones de seguridad fueron responsabilidad del equipo.
 
 **Lo que no se hizo con IA:** las conclusiones y las reflexiones individuales de la sección 10 fueron redactadas por cada integrante sin apoyo de IA.
 
@@ -277,7 +277,7 @@ docker pull ghcr.io/fakiier/devops_007d_ols:develop
 
 **Javier Romero:**  
 Como reflexión yo diría que los contenidos vistos en esta unidad son de vital importancia en nuestros futuros trabajos, en esta unidad se puso algo más complejo, tuve varios problemas con el código ya que era uno de un ramo anterior que no estaba al 100%, tuve que ir editando sobre la marcha e ir entendiendo lo que requería esta nueva tecnología, a fin de cuentas son cosas básicas que se ocuparán día a día, por lo que aprenderlas sin dudas ayuda a que nuestra formación como futuros profesionales sea aún más completa.
-Con el tiempo me he podido dar cuenta que GitHub es más complejo de lo que esperaba y que tiene más herramientas por lo que claro, a futuro será una herramienta que será vital a la hora de poder trabajar.
+Con el tiempo me he podido dar cuenta que GitHub es más complejo de lo que esperaba y que tiene más herramientas por lo que claro, a futuro será una herramienta que será vital a la hora de poder trabajar, ya que el automatizar tareas será algo muy importante.
 Sobre el tema IA, está claro que hoy en día tenemos que aprender a convivir con ella ya que es una nueva tecnología que llegó para quedarse, pero no por eso nos tenemos que dejar llevar por ella y dejar que haga todo por nosotros, es por ello que en nuestro trabajo se utilizó principalmente como una guía y consultor de errores dejando las decisiones más importantes para el factor humano, o sea, nosotros.
 
 
