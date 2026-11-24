@@ -1,0 +1,33 @@
+groups:
+  - name: ms-productos
+    rules:
+      - alert: ServicioCaido
+        expr: up{job="ms-productos"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "ms-productos no responde"
+          description: "Prometheus no puede leer las métricas de {{ $labels.instance }} desde hace más de 1 minuto."
+
+      - alert: ErroresServidorAltos
+        expr: |
+          sum(rate(http_server_requests_seconds_count{job="ms-productos",status=~"5.."}[5m]))
+          /
+          sum(rate(http_server_requests_seconds_count{job="ms-productos"}[5m])) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Más del 5% de las respuestas son errores 5xx"
+
+      - alert: MemoriaHeapAlta
+        expr: |
+          sum(jvm_memory_used_bytes{job="ms-productos",area="heap"})
+          /
+          sum(jvm_memory_max_bytes{job="ms-productos",area="heap"}) > 0.85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "El heap de la JVM supera el 85% de su máximo"
