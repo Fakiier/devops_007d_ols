@@ -1,0 +1,17 @@
+﻿# Responsables generales del repositorio
+* @Fakiier @miucat05
+
+# Integracion continua y automatizacion
+/.github/ @Fakiier @miucat05
+
+# Infraestructura y despliegue
+/k8s/ @Fakiier @miucat05
+/Dockerfile @Fakiier @miucat05
+/compose.yaml @Fakiier @miucat05
+
+# Monitoreo y observabilidad
+/monitoring/ @Fakiier @miucat05
+
+# Pruebas y calidad
+/pom.xml @Fakiier @miucat05
+/src/ @Fakiier @miucat05
