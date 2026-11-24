@@ -104,7 +104,7 @@ automáticamente con cada `push` a ramas `feature/**`, `develop` y `main`, y con
 | `test` | Ejecuta las pruebas unitarias, verifica la cobertura mínima de JaCoCo, genera el reporte HTML y lo sube como artefacto |
 | `security` | Analiza las dependencias con Snyk (`snyk test`) y el código con Snyk Code; falla si hay vulnerabilidades altas o críticas que no estén aceptadas en el archivo `.snyk` |
 | `push-ghcr` | Construye la imagen Docker y la publica en ghcr.io (solo en `push` a `develop` o `main`, y solo si `build`, `test` y `security` pasan) |
-| `deploy` | Descarga la imagen publicada, la despliega con Docker Compose en un entorno simulado (`staging` para `develop`, `production` para `main`), espera a que esté `healthy`, hace una prueba de humo y registra la trazabilidad en el resumen de la ejecución |
+| `deploy` | Descarga la imagen publicada, levanta un clúster de Kubernetes (kind) dentro del workflow, aplica los manifiestos de `k8s/` (namespace `app`, MySQL y `ms-productos`), espera a que los pods estén listos, hace una prueba de humo y registra la trazabilidad. Se ejecuta en un entorno simulado (`staging` para `develop`, `production` para `main`) |
 
 Si alguna prueba, la cobertura mínima o el análisis de seguridad falla, no se publica ni se despliega la imagen.
 
@@ -122,7 +122,8 @@ flowchart LR
     B --> E[push-ghcr]
     C --> E
     D --> E
-    E --> F[deploy: staging / production]
+    E --> F[deploy: kind + kubectl apply, staging / production]
+    F --> G[Prometheus + Grafana + Loki]
 ```
 
 #### Cómo se garantiza la trazabilidad
@@ -147,8 +148,81 @@ Cada cambio se puede seguir desde el commit hasta el entorno desplegado:
 - **Bloqueo en cadena:** `push-ghcr` solo corre si `build`, `test` y `security` pasan, y `deploy` solo corre si `push-ghcr` termina bien. Un fallo en cualquier etapa impide que la imagen se publique o se despliegue.
 - **Excepciones controladas:** las vulnerabilidades que hoy no tienen corrección sin migrar a Spring Boot 4 están documentadas una a una en el archivo `.snyk`, con su justificación y fecha de vencimiento (2026-12-31), para revisarlas antes de esa fecha.
 - **Dependencias al día:** Dependabot revisa semanalmente Maven, Docker y GitHub Actions y abre Pull Requests con las actualizaciones.
-- **Verificación del despliegue:** después de levantar el entorno con Docker Compose, el pipeline espera a que el servicio esté `healthy` y ejecuta una prueba de humo contra la API. Si falla, el despliegue falla.
+- **Verificación del despliegue:** después de aplicar los manifiestos en Kubernetes, el pipeline espera con `kubectl rollout status` a que MySQL y `ms-productos` estén listos y ejecuta una prueba de humo contra la API. Si falla, el despliegue falla.
 - **Control de cambios:** los cambios entran por Pull Request con el pipeline en verde y revisión del otro integrante. Los permisos del workflow están limitados a lectura, salvo la publicación de paquetes.
+
+### 6.2 Despliegue en Kubernetes (IE2)
+
+Los manifiestos están en la carpeta `k8s/` y se aplican en orden numérico:
+
+| Archivo | Contenido |
+|---|---|
+| `00-namespace.yaml` | Namespace `app` |
+| `01-config.yaml` | `ConfigMap` con la configuración del microservicio y `Secret` con la clave de MySQL |
+| `02-mysql.yaml` | MySQL 8 con volumen persistente (`PersistentVolumeClaim`) y su `Service` |
+| `03-app.yaml` | `Deployment` de `ms-productos` (con probes y límites de recursos) y su `Service` en el puerto 9095 |
+
+Puntos importantes del diseño:
+
+- El `Deployment` incluye un *init container* que espera a que MySQL acepte conexiones antes de arrancar la aplicación, porque Flyway migra la base al iniciar.
+- Tiene `startupProbe`, `readinessProbe` y `livenessProbe`, y límites de CPU y memoria (`requests` 250m / 384Mi y `limits` 1 CPU / 768Mi).
+- La clave de MySQL del archivo `01-config.yaml` es solo para pruebas locales. En el pipeline se genera una clave aleatoria en cada despliegue y se reemplaza antes de aplicar el manifiesto, por lo que no queda ninguna clave real en el repositorio.
+
+**Prueba local (kind):**
+
+```
+docker build -t ms-productos:local .
+kind create cluster --name devops
+kind load docker-image ms-productos:local --name devops
+kubectl apply -f k8s/
+kubectl get pods -n app
+kubectl port-forward -n app svc/ms-productos 9095:9095
+```
+
+Con el túnel abierto, `http://localhost:9095/actuator/health` debe responder `{"status":"UP"}`.
+
+**En el pipeline:** el job `deploy` crea un clúster kind efímero dentro de la ejecución, carga la imagen publicada (por SHA del commit), crea los namespaces `app` y `monitoring`, aplica los manifiestos en este orden (namespace, monitoring y aplicación) y verifica el resultado. Se eligió kind dentro del workflow, y no un runner propio, porque no requiere infraestructura fuera de GitHub y deja el despliegue reproducible en cada push a `develop` o `main`.
+
+### 6.3 Análisis de calidad con SonarQube Cloud (IE5)
+
+El workflow `.github/workflows/sonar.yml` ejecuta las pruebas, genera el reporte de cobertura de JaCoCo y envía el análisis a SonarQube Cloud. Está configurado con `sonar.qualitygate.wait=true`, así que el job falla si el *quality gate* no se cumple.
+
+**Limitación del plan gratuito:** SonarQube Cloud, en su plan gratuito, solo analiza la rama principal del proyecto (`main`). Por eso este workflow se ejecuta únicamente con los `push` a `main`; en las ramas `feature/*` y en los Pull Requests la calidad se controla con Snyk y con el umbral de cobertura de JaCoCo del job `test`. La condición de calidad de Sonar (por ejemplo, la calificación de seguridad del código nuevo) se evalúa cuando el trabajo llega a `main`.
+
+**Decisión que permite tomar:** si el quality gate falla (calificación de seguridad menor a A, cobertura o duplicación fuera de umbral), el cambio no se considera listo para entrega y se corrige antes de aprobarlo. Como buena práctica de seguridad, las acciones de terceros del workflow de Sonar están fijadas por hash de commit.
+
+### 6.4 Observabilidad: métricas, logs y alertas (IE1 e IE3)
+
+El microservicio expone métricas con Spring Boot Actuator y Micrometer en `/actuator/prometheus` (solo se exponen `health`, `info` y `prometheus`), y escribe sus logs en formato JSON por consola. El stack de observabilidad está en la carpeta `monitoring/`:
+
+| Herramienta | Uso |
+|---|---|
+| Prometheus | Recolecta cada 15 segundos las métricas de `ms-productos` y evalúa las alertas |
+| Grafana | Dashboard `ms-productos.json`, cargado automáticamente (aprovisionamiento por archivos) con métricas y logs |
+| Loki + Alloy | Recolectan los logs del contenedor para verlos en Grafana |
+
+**Alertas definidas** (`monitoring/alert.rules.yml`):
+
+| Alerta | Condición | Decisión que habilita |
+|---|---|---|
+| `ServicioCaido` | `up == 0` durante 1 minuto | Revisar el pod y los logs; si persiste, revertir al despliegue anterior |
+| `ErroresServidorAltos` | Más del 5% de las respuestas son 5xx durante 2 minutos | Revisar los logs de errores; detener la promoción a `main` |
+| `MemoriaHeapAlta` | Heap de la JVM sobre el 85% durante 5 minutos | Ajustar los límites de memoria del `Deployment` |
+
+**Dashboard:** muestra errores 5xx por segundo, uso de CPU, memoria heap, disponibilidad y los logs del servicio. 
+
+> **[Pendiente Javier]** completar: cómo se despliega este stack en Kubernetes (namespace `monitoring`), cómo se llevan al dashboard el tiempo de despliegue y la cobertura de pruebas, y capturas del dashboard.
+
+### 6.5 Cómo se integra cada herramienta y qué decisión permite tomar (IE4)
+
+| Herramienta | Dónde se integra | Decisión que permite |
+|---|---|---|
+| Snyk (`security`) | Job del CI en cada push y Pull Request | Si hay vulnerabilidades altas o críticas sin justificar en `.snyk`, no se publica ni se despliega la imagen |
+| JaCoCo (`test`) | Job del CI; mínimo de 80% de líneas | Si la cobertura baja del mínimo, el job falla y no hay merge ni despliegue |
+| SonarQube Cloud (`sonar-scan`) | Workflow `sonar.yml` en la rama principal | Si el quality gate falla, el cambio se corrige antes de entregarse |
+| Kubernetes (`deploy`) | Job `deploy` con kind dentro del workflow | Si los pods no quedan listos o la prueba de humo falla, el despliegue falla |
+| Prometheus y alertas | Métricas de `/actuator/prometheus` | Si el servicio cae o los errores 5xx suben, se investiga y se detiene la promoción |
+| Grafana y Loki | Dashboard y logs | Si la memoria o la CPU suben de forma sostenida, se ajustan los límites del `Deployment` |
 
 ## 7. Pruebas unitarias y reporte HTML
 
@@ -188,6 +262,11 @@ docker pull ghcr.io/fakiier/devops_007d_ols:develop
   - Apoyo en la configuración del análisis de seguridad con Snyk (job `security`, archivo `.snyk` y bloqueo del pipeline) y de Dependabot.
   - Apoyo en el job `deploy` con Docker Compose (healthcheck, prueba de humo y registro de trazabilidad).
   - Apoyo en los límites de recursos y la gestión de credenciales del `compose.yaml`.
+
+- Evaluación 3 (esta etapa):
+  - Apoyo en los manifiestos de Kubernetes (`k8s/`), la prueba en kind y el job `deploy` con kind dentro del workflow.
+  - Apoyo en la configuración de SonarQube Cloud (`sonar.yml`) y en el diagnóstico de errores del pipeline y de Git.
+  - Apoyo en el borrador de las secciones 6.2 a 6.5 de este README, que fue revisado y ajustado por el equipo.
 
 **Cómo se validó:** todo el contenido sugerido fue revisado por ambos integrantes, probado localmente con Docker Compose y Maven, y verificado en las ejecuciones del pipeline en GitHub Actions antes de integrarlo mediante Pull Request. Las decisiones técnicas, el código del proyecto y las justificaciones de las excepciones de seguridad fueron definidas por el equipo.
 
