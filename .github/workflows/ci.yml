@@ -77,6 +77,7 @@ jobs:
           push: false
           tags: ms-productos:ci
 
+
   security:
     runs-on: ubuntu-latest
     if: github.actor != 'dependabot[bot]'
@@ -91,16 +92,19 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
+      - name: Verificar Maven disponible
+        run: mvn -version
+
       - name: Instalar Snyk CLI
         uses: snyk/actions/setup@master
 
       - name: Snyk - vulnerabilidades en dependencias
-        run: snyk test --org=fakiier --severity-threshold=high -d
+        run: snyk test --maven-skip-wrapper --severity-threshold=high
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
       - name: Snyk Code - analisis estatico del codigo
-        run: snyk code test --org=fakiier --severity-threshold=high
+        run: snyk code test --severity-threshold=high
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
@@ -108,7 +112,8 @@ jobs:
         if: failure()
         run: |
           echo "### Analisis de seguridad fallido" >> $GITHUB_STEP_SUMMARY
-          echo "Snyk encontro vulnerabilidades de severidad alta o critica. El pipeline queda bloqueado: no se publica ni se despliega la imagen." >> $GITHUB_STEP_SUMMARY
+          echo "Snyk encontro vulnerabilidades de severidad alta o critica, o no pudo completar el analisis. El pipeline queda bloqueado." >> $GITHUB_STEP_SUMMARY
+  
 
   push-ghcr:
     runs-on: ubuntu-latest
@@ -158,8 +163,9 @@ jobs:
       - name: Preparar variables
         run: |
           echo "APP_IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}:${GITHUB_SHA}" >> $GITHUB_ENV
-          cp .env.example .env
-          sed -i "s/^MYSQL_ROOT_PASSWORD=.*/MYSQL_ROOT_PASSWORD=$(openssl rand -hex 16)/" .env
+          MYSQL_PASS=$(openssl rand -hex 16)
+          echo "::add-mask::$MYSQL_PASS"
+          echo "MYSQL_PASS=$MYSQL_PASS" >> $GITHUB_ENV
 
       - name: Login en ghcr.io
         uses: docker/login-action@v3
@@ -169,31 +175,60 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Descargar la imagen publicada por el pipeline
-        run: docker pull "$APP_IMAGE"
-
-      - name: Desplegar con Docker Compose
-        run: docker compose up -d --no-build
-
-      - name: Esperar a que ms-productos este healthy
         run: |
-          for i in $(seq 1 40); do
-            status=$(docker inspect --format '{{.State.Health.Status}}' ms-productos 2>/dev/null || echo "none")
-            echo "intento $i: $status"
-            [ "$status" = "healthy" ] && exit 0
-            sleep 5
-          done
-          echo "ms-productos no quedo healthy"
-          exit 1
+          docker pull "$APP_IMAGE"
+          docker tag "$APP_IMAGE" ms-productos:local
+
+      - name: Crear el cluster de Kubernetes (kind)
+        uses: helm/kind-action@ea822c7bf1874f08e5a491df991c228edffc3376 # v1.15.2
+        with:
+          cluster_name: devops
+
+      - name: Cargar la imagen en el cluster
+        run: kind load docker-image ms-productos:local --name devops
+
+      - name: Crear namespaces
+        run: |
+          kubectl apply -f k8s/00-namespace.yaml
+          kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Desplegar monitoring (si hay manifiestos de Kubernetes)
+        run: |
+          if [ -d monitoring/k8s ]; then
+            kubectl apply -f monitoring/k8s/
+          else
+            echo "monitoring/k8s no existe todavia: se omite el monitoreo"
+          fi
+
+      - name: Desplegar la aplicacion y MySQL
+        run: |
+          # La clave de MySQL se genera en cada despliegue (la del archivo es solo para pruebas locales)
+          sed "s/cambiar-esta-clave/${MYSQL_PASS}/" k8s/01-config.yaml | kubectl apply -f -
+          kubectl apply -f k8s/02-mysql.yaml
+          kubectl apply -f k8s/03-app.yaml
+
+      - name: Esperar a que MySQL y ms-productos esten listos
+        run: |
+          kubectl -n app rollout status deployment/mysql --timeout=240s
+          kubectl -n app rollout status deployment/ms-productos --timeout=300s
+          kubectl -n app get pods
 
       - name: Prueba de humo
         run: |
+          kubectl -n app port-forward svc/ms-productos 9095:9095 &
+          PF_PID=$!
+          sleep 8
           code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:9095/api/v1/productos)
           echo "HTTP $code"
+          kill $PF_PID
           case "$code" in 200|401|403) exit 0 ;; *) exit 1 ;; esac
 
-      - name: Logs si el despliegue falla
+      - name: Diagnostico si el despliegue falla
         if: failure()
-        run: docker compose logs
+        run: |
+          kubectl get pods -A
+          kubectl -n app describe pods
+          kubectl -n app logs deployment/ms-productos --tail=100 || true
 
       - name: Registrar trazabilidad
         run: |
@@ -201,9 +236,6 @@ jobs:
             echo "### Despliegue en ${{ github.ref_name }}"
             echo "- Commit: ${{ github.sha }}"
             echo "- Imagen: $APP_IMAGE"
+            echo "- Cluster: kind (devops), namespace app"
             echo "- Ejecucion: ${{ github.run_id }}"
           } >> $GITHUB_STEP_SUMMARY
-
-      - name: Limpiar
-        if: always()
-        run: docker compose down
