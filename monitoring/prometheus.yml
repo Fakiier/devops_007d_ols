@@ -9,3 +9,8 @@ scrape_configs:
       - targets: ['ms-productos:9095']
         labels:
           app: ms-productos
+
+  - job_name: 'pushgateway'
+    honor_labels: true
+    static_configs:
+      - targets: ['pushgateway:9091']
