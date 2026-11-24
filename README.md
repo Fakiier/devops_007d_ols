@@ -96,12 +96,13 @@ aplicación se guardan en los volúmenes `mysql_data` y `app_logs`, así que no 
 
 El repositorio cuenta con un workflow en `.github/workflows/ci.yml` que se ejecuta
 automáticamente con cada `push` a ramas `feature/**`, `develop` y `main`, y con cada
-`pull request` hacia `develop` o `main`. Usa Java 21 (distribución Temurin) y tiene cinco jobs:
+`pull request` hacia `develop` o `main`. Usa Java 21 (distribución Temurin) y tiene seis jobs:
 
 | Job | Qué hace |
 |---|---|
 | `build` | Descarga el código, configura Java 21 y compila el proyecto con Maven |
 | `test` | Ejecuta las pruebas unitarias, verifica la cobertura mínima de JaCoCo, genera el reporte HTML y lo sube como artefacto |
+| `docker-build` | Construye la imagen Docker con Buildx sin publicarla; se ejecuta después de `build` y `test` |
 | `security` | Analiza las dependencias con Snyk (`snyk test`) y el código con Snyk Code; falla si hay vulnerabilidades altas o críticas que no estén aceptadas en el archivo `.snyk` |
 | `push-ghcr` | Construye la imagen Docker y la publica en ghcr.io (solo en `push` a `develop` o `main`, y solo si `build`, `test` y `security` pasan) |
 | `deploy` | Descarga la imagen publicada, levanta un clúster de Kubernetes (kind) dentro del workflow, aplica los manifiestos de `k8s/` (namespace `app`, MySQL y `ms-productos`), espera a que los pods estén listos, hace una prueba de humo y registra la trazabilidad. Se ejecuta en un entorno simulado (`staging` para `develop`, `production` para `main`) |
